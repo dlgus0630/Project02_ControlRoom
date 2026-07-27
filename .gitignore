@@ -1,0 +1,6 @@
+Debug/
+Release/
+Core/Inc/Backup/
+Core/Src/Backup/
+Utilities/Fonts_KR/__pycache__/
+*.code-workspace
