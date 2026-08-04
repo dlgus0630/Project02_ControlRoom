@@ -15,7 +15,6 @@ extern const KorGlyph_t KOR_LOCKED;   /* "잠금" */
 extern const KorGlyph_t KOR_TAG_CARD;   /* "카드를 태그하세요" */
 extern const KorGlyph_t KOR_AUTH_FAIL;   /* "인증 실패" */
 extern const KorGlyph_t KOR_CONTROL_ROOM;   /* "관제실" */
-extern const KorGlyph_t KOR_CLEAR_EMG_BTN;   /* "비상해제" */
 extern const KorGlyph_t KOR_CURRENT_LABEL;   /* "현재" */
 extern const KorGlyph_t KOR_FLOOR_UNIT;   /* "층" */
 extern const KorGlyph_t KOR_TARGET_LABEL;   /* "목표" */
