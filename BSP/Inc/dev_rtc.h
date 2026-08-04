@@ -7,9 +7,11 @@ extern "C" {
 
 #include <stdint.h>
 
-/* DS1302 트리클 충전 RTC. 3선 인터페이스(CE/SCLK/IO)를 일반 GPIO로 비트뱅잉함.
-   I2C가 아니라 자체 프로토콜임. 블로킹 방식이지만 매우 짧음: 트랜잭션 하나가
-   GPIO 몇 번 토글이 전부라 메인루프에서 호출해도 안전함. */
+/* DS1302 실시간 시계(RTC) 드라이버.
+   CE/SCLK/IO 3가닥 신호선을 전용 통신 주변장치 없이 일반 GPIO를 직접 토글해서
+   구현한다(비트뱅잉). I2C나 SPI가 아니라 DS1302 고유의 프로토콜이다.
+   함수가 끝날 때까지 기다리는 블로킹 방식이지만, 한 번의 통신이 GPIO를 몇 번
+   토글하는 정도라 매우 짧아 메인루프에서 그대로 호출해도 무방하다. */
 
 typedef struct {
     uint8_t sec;    /* 0..59 */
@@ -21,9 +23,9 @@ typedef struct {
     uint8_t year;   /* 0..99 (2000년대로 가정) */
 } RTC_Time_t;
 
-void DS1302_Init(void);                 /* WP 해제, CH 해제(오실레이터 시작) */
-void DS1302_SetTime(const RTC_Time_t *t);
-void DS1302_GetTime(RTC_Time_t *t);
+void DS1302_Init(void);                    /* 쓰기 보호(WP) 해제 + 발진기 기동(CH 해제) */
+void DS1302_SetTime(const RTC_Time_t *t);  /* 시각 설정 (t가 NULL이면 아무것도 하지 않음) */
+void DS1302_GetTime(RTC_Time_t *t);        /* 현재 시각 읽기 (t가 NULL이면 아무것도 하지 않음) */
 
 #ifdef __cplusplus
 }

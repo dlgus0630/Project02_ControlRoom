@@ -31,7 +31,6 @@
 /* USER CODE BEGIN Includes */
 #include "app_control_room_fsm.h"   /* 관리실 메인 FSM(LCD/터치/RFID/RTC/RGB) */
 #include "app_rs485_ctrl.h"         /* 엘리베이터 Modbus 마스터 */
-#include <stdio.h>                  /* printf 디버그 출력용(임시 진단) */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

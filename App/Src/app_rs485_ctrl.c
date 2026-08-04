@@ -1,15 +1,13 @@
 #include "app_rs485_ctrl.h"
-#include "usart.h"     /* extern UART_HandleTypeDef huart5; (그리고 huart1) */
-#include <string.h>
-#include <stdio.h>     /* 임시 진단용 — 송신 시각/내용 로그 */
+#include "usart.h"     /* huart5(Modbus 통신용) 핸들 참조. huart1도 같이 선언돼 있다 */
 
 /* ======================================================
- * [동작 원리] — Modbus RTU 마스터(관리실) 폴링 방식
+ * [동작 원리] — Modbus RTU 마스터(관제실) 폴링 방식
  *
  * 마스터는 "요청을 먼저 보내고 -> 응답을 기다린다"를 반복한다.
  *
  * 1) IDLE 상태에서 폴링 주기(200ms)가 지나면 요청 1개를 전송한다.
- *    - 보낼 쓰기 명령(목표층/비상해제)이 예약돼 있으면 그 0x06 쓰기를 먼저 보내고,
+ *    - 보낼 쓰기 명령(목표층/비상해제/점검)이 예약돼 있으면 그 0x06 쓰기를 먼저 보내고,
  *      없으면 0x03 읽기(레지스터 0~8 전부)를 보낸다.
  *    - 전송 뒤에는 WAITING 상태로 넘어가고, 무엇을 보냈는지 기억해 둔다.
  *
@@ -72,7 +70,6 @@ static uint8_t  s_elev_state    = 0;
 static uint8_t  s_emergency     = 0;
 static uint16_t s_temp_x10      = 0;
 static uint16_t s_humid_x10     = 0;
-static uint8_t  s_dht_status    = 0;
 static uint8_t  s_inspection    = 0;
 static uint16_t s_error_code    = 0;   /* 통합 오류코드(REG_ERROR_CODE) */
 
@@ -105,16 +102,6 @@ static void Send_Request(uint8_t *frame, uint16_t len)
     frame[len + 1] = (uint8_t)(crc >> 8);     /* CRC 상위바이트 */
 
     s_rx_len = 0;   /* 새 응답을 받기 위해 버퍼 초기화 */
-
-    /* 임시 진단: 실제로 언제, 무엇을 내보냈는지 — 엘리베이터 쪽
-       [RS485 RX] 로그와 시간을 맞춰봐서 진짜 요청이 도착하는지,
-       아니면 지금 보이는 게 그냥 버스 잡음인지 구분하기 위함 */
-    printf("[RS485 TX] t=%lu len=%u raw:", (unsigned long)HAL_GetTick(), (unsigned)(len + 2));
-    for (uint16_t i = 0; i < len + 2; i++)
-    {
-        printf(" %02X", frame[i]);
-    }
-    printf("\r\n");
 
     HAL_UART_Transmit(&huart5, frame, len + 2, 100);
 }
@@ -176,7 +163,6 @@ static uint8_t Parse_ReadResponse(uint8_t *buf, uint8_t len)
     s_emergency     = (uint8_t)reg[REG_EMERGENCY];
     s_temp_x10      = reg[REG_TEMPERATURE_X10];
     s_humid_x10     = reg[REG_HUMIDITY_X10];
-    s_dht_status    = (uint8_t)reg[REG_DHT_STATUS];
     s_inspection    = (uint8_t)reg[REG_INSPECTION];
     s_error_code    = reg[REG_ERROR_CODE];
     return 1;
@@ -315,11 +301,6 @@ void RS485_Update(void)
         uint8_t len = s_rx_len;
         s_rx_len = 0;   /* 버퍼 소비 */
 
-        /* 임시 진단: 응답으로 뭐가 왔는지 그대로 찍어본다 */
-        printf("[RS485 RESP] t=%lu len=%u raw:", (unsigned long)now, len);
-        for (uint8_t i = 0; i < len; i++) printf(" %02X", s_rx_buf[i]);
-        printf("\r\n");
-
         if (Process_Response(s_rx_buf, len))
         {
             /* 통신 성공 */
@@ -340,8 +321,6 @@ void RS485_Update(void)
     /* 2) 타임아웃: 정해진 시간 동안 응답이 없으면 실패 처리 */
     if (now - s_req_send_tick >= RESP_TIMEOUT_MS)
     {
-        /* 임시 진단: 타임아웃까지 아무 응답도 못 받았음을 명시 */
-        printf("[RS485 RESP] t=%lu TIMEOUT (no response)\r\n", (unsigned long)now);
         s_rx_len = 0;
         if (s_fail_count < 255) s_fail_count++;
         if (s_fail_count >= MAX_FAIL_COUNT) s_link_ok = 0;
@@ -363,7 +342,6 @@ uint8_t RS485_GetElevState(void)    { return s_elev_state;    }
 uint8_t RS485_GetEmergency(void)    { return s_emergency;     }
 float   RS485_GetTemperature(void)  { return s_temp_x10  / 10.0f; }
 float   RS485_GetHumidity(void)     { return s_humid_x10 / 10.0f; }
-uint8_t RS485_GetDhtStatus(void)    { return s_dht_status;    }
 uint8_t RS485_GetInspection(void)   { return s_inspection;    }
 uint16_t RS485_GetErrorCode(void)   { return s_error_code;    }
 uint8_t RS485_IsLinkOk(void)        { return s_link_ok;       }

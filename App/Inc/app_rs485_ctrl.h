@@ -4,7 +4,7 @@
 #include "main.h"
 
 /* ======================================================
- * Modbus RTU 마스터 (관리실 = F429)
+ * Modbus RTU 마스터 (관제실 = F429)
  * 통신: UART5 (PC12=TX, PD2=RX), 115200bps
  * 역할: 슬레이브(엘리베이터 카)에게 주기적으로 요청을 보내고
  *       응답을 받아서 화면에 보여줄 값들을 보관(shadow)한다.
@@ -21,7 +21,7 @@ typedef enum {
     REG_EMERGENCY       = 3,   /* 비상정지 상태     (R/W, 0=정상)          */
     REG_TEMPERATURE_X10 = 4,   /* 온도*10           (R)  예: 23.5도 -> 235 */
     REG_HUMIDITY_X10    = 5,   /* 습도*10           (R)                    */
-    REG_DHT_STATUS      = 6,   /* DHT 상태          (R)                    */
+    REG_DHT_STATUS      = 6,   /* DHT 센서 상태     (R)  관제실에서는 미사용 */
     REG_INSPECTION      = 7,   /* 점검 모드 상태     (R/W, 0=정상, 1=점검중) */
     REG_ERROR_CODE      = 8,   /* 통합 오류코드      (R) — 0/101/102/103/201/301/401/402 */
 } ModbusReg_t;
@@ -37,12 +37,11 @@ uint8_t  RS485_GetElevState(void);    /* REG_PENDING_ACTION = 엘리베이터 FS
 uint8_t  RS485_GetEmergency(void);
 float    RS485_GetTemperature(void);  /* temp_x10 / 10.0f */
 float    RS485_GetHumidity(void);     /* humid_x10 / 10.0f */
-uint8_t  RS485_GetDhtStatus(void);
 uint8_t  RS485_GetInspection(void);   /* 점검 모드 상태(0=정상, 1=점검중) */
 uint16_t RS485_GetErrorCode(void);    /* 통합 오류코드(0/101/102/103/201/301/401/402) */
 uint8_t  RS485_IsLinkOk(void);        /* 최근 폴링 성공 1, 연속실패면 0 */
 
-/* 슬레이브에 명령을 보내달라고 예약 (다음 폴링 주기에 실제 전송) */
+/* 슬레이브에 보낼 명령을 예약한다 (실제 전송은 다음 폴링 주기에) */
 void RS485_SetTargetFloor(uint8_t floor);  /* 목표층 쓰기 예약 */
 void RS485_ClearEmergency(void);           /* 비상해제 쓰기 예약 */
 void RS485_SetInspection(void);            /* 점검 시작 쓰기 예약(값=1) */

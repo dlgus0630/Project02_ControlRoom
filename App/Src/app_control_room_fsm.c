@@ -13,25 +13,27 @@
 
 /* ======================================================
  * [동작 요약]
- *  - CR_STATE_LOCKED   : 검은 잠금화면, "카드를 대세요" 안내.
+ *  - CR_STATE_LOCKED   : 잠금화면, "카드 태그" 안내.
  *                        RC522로 카드가 감지되면 UID를 저장하고 AUTH_CHECK로.
  *  - CR_STATE_AUTH_CHECK: 저장한 UID를 허용목록과 대조.
  *                        일치 -> UNLOCKED, 불일치 -> 실패표시(약1초) 후 LOCKED.
- *  - CR_STATE_UNLOCKED : 대시보드(현재/목표층, 상태, 온습도, 통신).
- *                        아래 터치 버튼으로 목표층 지정/비상해제.
- *                        비상 or 오류가 뜨면 ALERT로.
+ *  - CR_STATE_UNLOCKED : 대시보드(현재/목표층, 상태, 온습도, 통신, 시각).
+ *                        아래 터치 버튼으로 목표층 지정/점검 시작.
+ *                        비상 or 오류가 뜨면 ALERT로, 점검 모드면 INSPECT로.
  *  - CR_STATE_ALERT    : 대시보드 위에 경고 팝업을 그림. 해제 버튼으로
  *                        비상해제를 예약하고, 정상으로 돌아오면 UNLOCKED로.
+ *  - CR_STATE_INSPECT  : 대시보드 위에 점검 팝업을 그림. 점검해제 버튼으로
+ *                        점검해제를 예약하고, 해제되면 UNLOCKED로.
+ *                        점검 중 비상이 겹치면 ALERT가 우선한다.
  *
  *  모든 처리는 논블로킹이다. HAL_Delay는 절대 쓰지 않고 HAL_GetTick()으로만
  *  시간을 잰다.
  *
  *  [LCD 한글 표시 방법]
- *  이제 한글 비트맵 폰트(app_kor_glyphs.h의 KOR_* 글리프)가 적용되어 화면에
- *  한글이 직접 찍힌다. "관리실", "잠금", "카드 태그", "비상 상황" 같은 고정
- *  문구는 KOR_DrawGlyph()로 미리 만들어 둔 KOR_* 글리프를 그린다.
- *  숫자(층/온도/습도)·시각·카드 UID 같은 ASCII 문자열은 기존 기본 비트맵
- *  폰트(Font8~Font24)를 그대로 써서 BSP_LCD_DisplayStringAt()로 그린다.
+ *  "관제실", "잠금", "카드 태그", "비상 상황" 같은 고정 문구는 한글 비트맵
+ *  폰트(app_kor_glyphs.h의 KOR_* 글리프)를 KOR_DrawGlyph()로 그린다.
+ *  숫자(층/온도/습도)·시각·카드 UID 같은 ASCII 문자열은 BSP 기본 비트맵
+ *  폰트(Font8~Font24)를 써서 BSP_LCD_DisplayStringAt()로 그린다.
  *  한 줄에 한글과 ASCII를 나란히 붙일 때는 draw_kor_advance()/
  *  draw_ascii_advance() 헬퍼로 x좌표를 누적해 가며 그린다.
  * ====================================================== */
@@ -55,9 +57,8 @@ static const uint8_t s_allowed_uids[][4] = {
 
 /* ── 화면 색상 (다크테마, 포맷은 0xFF RR GG BB = ARGB8888, 알파는 항상 FF) ── */
 #define COL_BG        0xFF12161F   /* 대시보드 배경: 짙은 남색 계열 다크 */
-#define COL_LOCK_BG   0xFF12161F   /* 잠금화면 배경: 대시보드와 통일 (기존 순수 블랙에서 변경) */
+#define COL_LOCK_BG   0xFF12161F   /* 잠금화면 배경: 대시보드 배경과 동일하게 통일 */
 #define COL_TEXT      0xFFE6E9EF   /* 본문 글자: 소프트 화이트 */
-#define COL_TITLEBG   0xFF8FA6BF   /* 제목바 배경: "대기" 상태값과 동일한 색 */
 #define COL_TITLETX   0xFFEAF6FA   /* 제목바 글자: 밝은 화이트 */
 #define COL_WARN      0xFFFF5252   /* 경고색: 밝은 레드 (다크 배경에서 눈에 띔) */
 #define COL_BTN       0xFF1E2530   /* 버튼 배경: 대시보드보다 한 톤 밝은 다크 */
@@ -229,7 +230,7 @@ static void format_1dp(float value, const char *unit, char *out, int outsz)
     snprintf(out, outsz, "%d.%d%s", whole, frac, unit);
 }
 
-/* 관리실 입장/퇴장 로그를 DS1302 시각과 함께 시리얼로 남긴다.
+/* 관제실 입장/퇴장 로그를 DS1302 시각과 함께 시리얼로 남긴다.
    (한글 대신 영어로 찍는 이유: 터미널에 따라 한글이 깨져 보일 수 있어서.
    event에는 "ENTER"/"EXIT"가 들어온다.) */
 static void log_event(const char *event)
@@ -245,7 +246,7 @@ static void log_event(const char *event)
  * 화면 그리기 — 각 상태에 "처음 진입할 때" 한 번 전체를 그린다.
  * ====================================================== */
 
-/* 잠금화면: 검은 배경 + 안내 + 마지막 UID */
+/* 잠금화면: 다크 배경 + "잠금"/"카드 태그" 안내 + 마지막으로 읽은 UID */
 static void draw_locked_screen(void)
 {
     BSP_LCD_Clear(COL_LOCK_BG);
@@ -318,7 +319,9 @@ static void refresh_dashboard_info(uint8_t force)
     RTC_Time_t t;
     int i;
 
-    /* 변경 감지용 문자열 스냅샷(화면에 직접 찍히진 않고, 이전 값과 비교만 한다) */
+    /* 이번 tick의 값들을 문자열 스냅샷으로 만든다.
+       주 용도는 "이전 값과 비교해서 바뀐 줄만 다시 그리기"이고,
+       습도(line[3])·시각(line[5])처럼 ASCII 그대로인 줄은 화면에도 그대로 쓴다. */
     snprintf(line[0], sizeof(line[0]), "C%u T%u", cur, tgt);   /* 현재/목표층 */
     snprintf(line[1], sizeof(line[1]), "S%u", st);             /* 상태 */
     format_1dp(RS485_GetTemperature(), "C", temp_txt, sizeof(temp_txt));   /* 화면에 찍을 온도값(순수) */
@@ -342,9 +345,6 @@ static void refresh_dashboard_info(uint8_t force)
         uint16_t x = 8;
         uint16_t y = 44 + (uint16_t)(i * 25);
         char numbuf[16];
-
-        /* 상태값/통신상태는 아래 case 안에서 값 글자만 강조색으로 그린다.
-           (라벨은 txt = COL_TEXT 유지) */
 
         /* 강제 그리기가 아니고 값이 그대로면 그 줄은 건너뛴다 */
         if (!force && strcmp(line[i], s_prev_line[i]) == 0) continue;
@@ -429,7 +429,7 @@ static void draw_alert_popup(void)
 
     /* 본문 텍스트를 오류코드별로 분기 (모두 가로 가운데정렬, POP_Y+70 위치).
        301=위치 인식 오류, 201=이동 타임아웃, 비상정지(REG_EMERGENCY=1)=비상정지 눌림,
-       그 외(402 점검 등)는 기존 폴백 문구 "엘리베이터 오류". */
+       그 외는 폴백 문구 "엘리베이터 오류"를 띄운다. */
     if (err == 301)
         /* "위치 인식 오류" (본문: 밝은 화이트) */
         KOR_DrawGlyph((s_w - KOR_POS_ERROR.width) / 2, POP_Y + 70,
@@ -479,7 +479,7 @@ static void draw_inspect_popup(void)
  * 터치 처리(에지 검출) — 각 상태에서 눌린 순간 1번만 반응
  * ====================================================== */
 
-/* 대시보드에서 목표층/비상해제 버튼 처리 */
+/* 대시보드에서 목표층 버튼(1~3층)과 점검 버튼 처리 */
 static void handle_dashboard_touch(uint16_t px, uint16_t py)
 {
     if (point_in_rect(px, py, FBTN1_X, FBTN_Y, FBTN_W, FBTN_H))
@@ -508,8 +508,7 @@ void ControlRoom_FSM_Init(void)
     s_h = (uint16_t)BSP_LCD_GetYSize();
 
     /* 터치스크린 초기화(화면 크기 전달) */
-    /* 임시 진단: 초기화 자체가 성공했는지 확인용(원인 좁혀지면 삭제) */
-    printf("[TS] BSP_TS_Init ret=%u (0=성공)\r\n", (unsigned)BSP_TS_Init(s_w, s_h));
+    BSP_TS_Init(s_w, s_h);
 
     /* 주변장치 초기화 */
     RC522_Init();
@@ -545,8 +544,6 @@ void ControlRoom_FSM_Update(void)
     if (touched) { px = ts.X; py = (uint16_t)(s_h - ts.Y); }
     rising = (touched && !s_prev_touch) ? 1 : 0;
     s_prev_touch = touched;
-    /* 임시 진단: 터치가 실제로 잡히는지, 좌표가 뭐로 나오는지 확인용(원인 좁혀지면 삭제) */
-    if (rising) { printf("[TS] touch px=%u py=%u\r\n", px, py); }
 
     /* RFID 카드 디바운스 — 인식이 순간순간 끊겨도(<CARD_ABSENT_MS) 계속
        대고 있는 것으로 보고, CARD_ABSENT_MS 이상 연속으로 안 잡혀야
@@ -578,7 +575,7 @@ void ControlRoom_FSM_Update(void)
         if (entering)
         {
             draw_locked_screen();
-            RGB_SetColor(RGB_BLUE);   /* 잠금 상태는 파랑으로 표시(관리실 초록과 구분) */
+            RGB_SetColor(RGB_BLUE);   /* 잠금 상태는 파랑(해제 상태의 초록과 구분) */
         }
         /* 카드를 새로 갖다댄 순간에만 반응(계속 대고 있어도 한 번만) */
         if (card_rising)
