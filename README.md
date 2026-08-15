@@ -504,7 +504,7 @@ CubeMX가 생성한 HAL 초기화 코드(`Core/`), ST가 제공하는 보드 지
 `App/` 계층은 "RC522가 SPI4인지, 터치가 I2C3인지"를 전혀 모릅니다. `RC522_CheckCard()`, `BSP_TS_GetState()` 같은 함수 이름으로만 대화하므로, 부품이 바뀌어도 FSM은 그대로 둘 수 있습니다.
 
 ```
-Project02_Control_Room/
+Project02_ControlRoom/
 ├── Core/
 │   ├── Inc, Src             # CubeMX 생성 HAL 초기화 (gpio/ltdc/fmc/spi/usart/tim), main.c
 │   └── Startup              # 스타트업 어셈블리, 링커 스크립트
@@ -525,7 +525,7 @@ Project02_Control_Room/
 ├── Utilities/
 │   ├── Fonts                # ST 표준 ASCII 비트맵 폰트 (Font8~Font24)
 │   └── Fonts_KR             # 한글 글리프 — gen_kor_glyphs.py로 생성
-├── Project02_Control_Room.ioc        # CubeMX 설정 파일
+├── Project02_ControlRoom.ioc        # CubeMX 설정 파일
 └── STM32F429ZITX_FLASH.ld / _RAM.ld  # 링커 스크립트
 ```
 
@@ -768,7 +768,7 @@ cd Debug
 make -j
 ```
 
-빌드 산출물 : `Debug/Project02_Control_Room.elf`, `.map`, `.list`
+빌드 산출물 : `Debug/Project02_ControlRoom.elf`, `.map`, `.list`
 
 **한글 글리프 재생성 (문구 추가·변경 시)**
 
