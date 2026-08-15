@@ -93,12 +93,15 @@ extern "C" {
 /* #define SDRAM_BANK_REMAP */
 
 /* SDRAM 리프레시 카운터 설정 */
-/* (15.62us x SDRAM 클럭) - 20. 원래 1386은 이 보드 최대클럭(180MHz, SDCLK=90MHz)
-   기준값이었는데, 우리 프로젝트는 SYSCLK=72MHz(SDCLK=36MHz)라서 그 클럭에 맞게
-   다시 계산함: (15.62us x 36,000,000) - 20 ≈ 542.
-   (원래 값을 그대로 쓰면 리프레시가 실제 필요한 것보다 뜸하게 일어나서
-    화면에 노이즈가 낌 — DRAM은 주기적으로 다시 채워주지 않으면 데이터가 샘) */
-#define REFRESH_COUNT           ((uint32_t)542)   /* SDRAM refresh counter */
+/* (15.62us x SDRAM 클럭) - 20. ST 기본값 1386은 이 보드 최대클럭(180MHz,
+   SDCLK=90MHz) 기준값이라 우리 클럭에 맞게 다시 계산해서 씀.
+   현재 SYSCLK=18MHz, SDCLK=HCLK/2=9MHz 기준:
+   (15.62us x 9,000,000) - 20 ≈ 120.
+   (값이 실제 클럭보다 크면 리프레시가 필요한 것보다 뜸하게 일어나서 화면에
+    노이즈가 낌 — DRAM은 주기적으로 다시 채워주지 않으면 데이터가 샘)
+   주의: SYSCLK을 바꾸면 이 값도 반드시 같이 다시 계산해야 함. 상류 클럭이
+   바뀌어도 이 상수는 자동으로 따라오지 않고 조용히 어긋남 */
+#define REFRESH_COUNT           ((uint32_t)120)   /* SDRAM refresh counter */
 #define SDRAM_TIMEOUT           ((uint32_t)0xFFFF)
 
 /* DMA definitions for SDRAM DMA transfer */
