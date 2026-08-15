@@ -41,11 +41,6 @@
 
 > 🔗 이 저장소는 2보드 분산 제어 시스템 중 **관제실(F429, 마스터)** 쪽입니다.
 > 짝이 되는 엘리베이터 카(F411, 슬레이브)는 별도 저장소 **[Project02_Elevator](https://github.com/dlgus0630/Project02_Elevator)** 에 있습니다.
->
-> | 보드 | 역할 | 저장소 |
-> |---|---|---|
-> | STM32F429 | 관제실 — Modbus **마스터** | **이 저장소** |
-> | STM32F411 | 엘리베이터 카 — Modbus **슬레이브** | [Project02_Elevator](https://github.com/dlgus0630/Project02_Elevator) |
 
 <br>
 
